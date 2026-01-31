@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import React, { useEffect, useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { fetchSymptoms, predictDisease } from "../api";
 
 const Predictor = () => {
   const [symptoms, setSymptoms] = useState([]);            // [{id, label}]
   const [selectedSymptoms, setSelectedSymptoms] = useState([]); // [id,...]
-  const [dropdownSymptom, setDropdownSymptom] = useState("");   // currently chosen in <select>
+  const [searchQuery, setSearchQuery] = useState("");
   const [loadingSymptoms, setLoadingSymptoms] = useState(true);
   const [loadingPrediction, setLoadingPrediction] = useState(false);
   const [error, setError] = useState("");
@@ -19,7 +19,7 @@ const Predictor = () => {
       .trim()
       .replace(/\b\w/g, (c) => c.toUpperCase());
 
-  // Normalize backend symptoms: handle ["itching", ...] OR [{id, label}, ...]
+  // Normalize backend symptoms
   const normalizeSymptoms = (raw) => {
     if (!Array.isArray(raw)) return [];
     return raw.map((s) => {
@@ -33,22 +33,17 @@ const Predictor = () => {
     });
   };
 
-  // Load symptoms from backend on mount
   useEffect(() => {
     const load = async () => {
       try {
         setLoadingSymptoms(true);
         setError("");
         const data = await fetchSymptoms();
-        // support {symptoms: [...]} OR [...]
         const normalized = normalizeSymptoms(data.symptoms || data);
         setSymptoms(normalized);
-        if (normalized.length > 0) {
-          setDropdownSymptom(normalized[0].id);
-        }
       } catch (err) {
         console.error(err);
-        setError("Failed to load symptoms from server. Please check backend.");
+        setError("Failed to load symptoms. Please check your connection.");
       } finally {
         setLoadingSymptoms(false);
       }
@@ -56,24 +51,22 @@ const Predictor = () => {
     load();
   }, []);
 
-  const handleAddSymptom = () => {
-    if (!dropdownSymptom) return;
-    setSelectedSymptoms((prev) =>
-      prev.includes(dropdownSymptom) ? prev : [...prev, dropdownSymptom]
-    );
+  const toggleSymptom = (id) => {
+    setSelectedSymptoms((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((s) => s !== id);
+      }
+      return [...prev, id];
+    });
     setResult(null);
     setError("");
-  };
-
-  const removeSymptom = (id) => {
-    setSelectedSymptoms((prev) => prev.filter((s) => s !== id));
-    setResult(null);
   };
 
   const clearAll = () => {
     setSelectedSymptoms([]);
     setResult(null);
     setError("");
+    setSearchQuery("");
   };
 
   const handlePredict = async () => {
@@ -81,7 +74,7 @@ const Predictor = () => {
     setResult(null);
 
     if (selectedSymptoms.length === 0) {
-      setError("Please select at least one symptom before predicting.");
+      setError("Please select at least one symptom.");
       return;
     }
 
@@ -102,158 +95,171 @@ const Predictor = () => {
     }
   };
 
-  // Helper: get label from id
   const getLabel = (id) => {
     const s = symptoms.find((sym) => sym.id === id);
     return s ? s.label : prettifySymptomLabel(id);
   };
 
+  const filteredSymptoms = useMemo(() => {
+    if (!searchQuery) return symptoms;
+    const lower = searchQuery.toLowerCase();
+    return symptoms.filter((s) => s.label.toLowerCase().includes(lower));
+  }, [symptoms, searchQuery]);
+
   return (
     <div className="page-container">
-      <motion.h1
-        className="page-title"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        Disease Predictor
-      </motion.h1>
-
-      <motion.p
-        className="page-subtitle"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-      >
-        Select one or more symptoms from the dropdown, add them to your list, and
-        click <strong>Predict Disease</strong>. The predicted disease and its
-        description will be shown below.
-      </motion.p>
-
       <div className="predictor-layout">
-        {/* LEFT SIDE: Symptom selection */}
+        {/* LEFT PANEL */}
         <motion.section
           className="symptom-panel"
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5 }}
         >
           <div className="panel-header">
             <h2>Select Symptoms</h2>
-            <button className="btn btn-small" onClick={clearAll}>
-              Clear All
-            </button>
+            {selectedSymptoms.length > 0 && (
+              <button className="btn btn-outline btn-small" onClick={clearAll}>
+                Clear
+              </button>
+            )}
           </div>
 
-          {loadingSymptoms ? (
-            <p>Loading symptoms...</p>
-          ) : symptoms.length === 0 ? (
-            <p>No symptoms loaded from server.</p>
-          ) : (
-            <>
-              {/* Dropdown select */}
-              <div className="select-row">
-                <select
-                  value={dropdownSymptom}
-                  onChange={(e) => setDropdownSymptom(e.target.value)}
-                  className="symptom-select"
+          <div className="search-bar">
+            <input
+              type="text"
+              placeholder="Search symptoms (e.g. fever, rash)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+
+          <div className="selected-chips">
+            <AnimatePresence>
+              {selectedSymptoms.map((id) => (
+                <motion.div
+                  key={id}
+                  className="chip"
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.8, opacity: 0 }}
+                  layout
                 >
-                  {symptoms.map((s) => (
-                   <option key={s.id} value={s.id}>
+                  <span>{getLabel(id)}</span>
+                  <button
+                    className="chip-remove"
+                    onClick={() => toggleSymptom(id)}
+                  >
+                    ✕
+                  </button>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+
+          <div className="symptom-list">
+            {loadingSymptoms ? (
+              <p style={{ color: "var(--text-muted)", padding: "1rem" }}>Loading symptoms...</p>
+            ) : filteredSymptoms.length === 0 ? (
+              <p style={{ color: "var(--text-muted)", padding: "1rem" }}>No symptoms found.</p>
+            ) : (
+              filteredSymptoms.map((s) => {
+                const isSelected = selectedSymptoms.includes(s.id);
+                return (
+                  <motion.div
+                    key={s.id}
+                    className={`symptom-item ${isSelected ? "symptom-item-selected" : ""}`}
+                    onClick={() => toggleSymptom(s.id)}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      readOnly
+                    />
                     {s.label}
-                </option>
-
-                  ))}
-                </select>
-                <button
-                  className="btn btn-primary btn-small"
-                  type="button"
-                  onClick={handleAddSymptom}
-                >
-                  Add Symptom
-                </button>
-              </div>
-
-              {/* Selected symptoms */}
-              <div className="selected-chips">
-                {selectedSymptoms.length === 0 ? (
-                  <p className="hint-text">
-                    No symptoms selected yet. Choose one from the dropdown above
-                    and click <strong>Add Symptom</strong>.
-                  </p>
-                ) : (
-                  <>
-                    <p className="hint-text">
-                      Selected symptoms ({selectedSymptoms.length}):
-                    </p>
-                    <div className="chip-container">
-                      {selectedSymptoms.map((id) => (
-                        <div key={id} className="chip">
-                          <span>{getLabel(id)}</span>
-                          <button
-                            type="button"
-                            className="chip-remove"
-                            onClick={() => removeSymptom(id)}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            </>
-          )}
+                  </motion.div>
+                );
+              })
+            )}
+          </div>
         </motion.section>
 
-        {/* RIGHT SIDE: Prediction result */}
+        {/* RIGHT PANEL */}
         <motion.section
           className="result-panel"
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
         >
-          <h2>Prediction</h2>
+          <h2>Prediction Results</h2>
 
-          {error && <div className="alert alert-error">{error}</div>}
+          <div style={{ minHeight: '100px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            {!result && !loadingPrediction && !error && (
+              <p className="hint-text" style={{ textAlign: "center" }}>
+                Select symptoms and click Predict to see AI analysis.
+              </p>
+            )}
 
-          <button
-            className="btn btn-primary btn-full"
-            onClick={handlePredict}
-            disabled={loadingPrediction || loadingSymptoms}
-          >
-            {loadingPrediction ? "Predicting..." : "Predict Disease"}
-          </button>
+            {error && (
+              <motion.div
+                className="alert alert-error"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                {error}
+              </motion.div>
+            )}
 
-     {result && !result.error && (
-  <motion.div
-    className="result-card"
-    initial={{ opacity: 0, scale: 0.95 }}
-    animate={{ opacity: 1, scale: 1 }}
-  >
-    <h3>Predicted Disease</h3>
-    <p className="disease-name">{result.disease}</p>
+            <button
+              className="btn btn-primary btn-full"
+              onClick={handlePredict}
+              disabled={loadingPrediction || loadingSymptoms || selectedSymptoms.length === 0}
+              style={{ marginBottom: '1.5rem' }}
+            >
+              {loadingPrediction ? "Analyzing..." : "Predict Disease"}
+            </button>
+          </div>
 
-    <h4>Description</h4>
-    <p>{result.description}</p>
+          <AnimatePresence mode="wait">
+            {result && !result.error && (
+              <motion.div
+                className="result-card"
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 200, damping: 20 }}
+              >
+                <h3 style={{ color: "var(--text-muted)", fontSize: "0.9rem", textTransform: "uppercase", letterSpacing: "1px" }}>Likely Condition</h3>
+                <p className="disease-name" style={{ fontSize: "2rem", lineHeight: "1.2", marginBottom: "1rem" }}>
+                  {result.disease}
+                </p>
 
-    {result.precautions && result.precautions.length > 0 && (
-      <>
-        <h4>Precautions</h4>
-        <ul className="precaution-list">
-          {result.precautions.map((item, index) => (
-            <li key={index}>{item}</li>
-          ))}
-        </ul>
-      </>
-    )}
-  </motion.div>
-)}
+                <h4 style={{ marginBottom: "0.5rem", color: "var(--text)" }}>Medical Description</h4>
+                <p style={{ marginBottom: "1.5rem", lineHeight: "1.6" }}>{result.description}</p>
 
-
-          {!result && !error && (
-            <p className="hint-text" style={{ marginTop: "0.8rem" }}>
-              After selecting symptoms on the left, click{" "}
-              <strong>Predict Disease</strong> to see the result here.
-            </p>
-          )}
+                {result.precautions && result.precautions.length > 0 && (
+                  <>
+                    <h4 style={{ marginBottom: "0.5rem", color: "var(--text)" }}>Recommended Actions</h4>
+                    <ul className="precaution-list">
+                      {result.precautions.map((item, index) => (
+                        <motion.li
+                          key={index}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.1 * index }}
+                          style={{ marginBottom: "0.5rem" }}
+                        >
+                          {item}
+                        </motion.li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.section>
       </div>
     </div>

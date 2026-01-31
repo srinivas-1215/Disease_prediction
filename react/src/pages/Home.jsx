@@ -7,37 +7,30 @@ const Home = () => {
     <div className="page-container">
       <motion.section
         className="hero-section"
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.8 }}
       >
-        <div className="hero-text">
-          <h1>AI-powered Disease Prediction</h1>
+        <motion.div 
+          className="hero-text"
+          initial={{ y: 30, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.2, duration: 0.8, ease: "easeOut" }}
+        >
+          <h1>Health Insights,<br/>Instant Predictions.</h1>
           <p>
-            Select your symptoms and get a predicted disease, detailed
-            description, and recommended precautions
+            Advanced AI analysis for early disease detection. 
+            Identify symptoms and receive instant, precautious medical guidance.
           </p>
+          
           <div className="hero-actions">
             <Link to="/predict" className="btn btn-primary">
-              Start Prediction
+              Start Diagnosis
             </Link>
             <Link to="/about" className="btn btn-outline">
-              Learn More
+              How it Works
             </Link>
           </div>
-        </div>
-        <motion.div
-          className="hero-card"
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2, duration: 0.5 }}
-        >
-          <h2>How it works</h2>
-          <ul>
-            <li>Choose your symptoms</li>
-            <li>Our model analyzes patterns</li>
-            <li>Get possible disease + precautions</li>
-          </ul>
         </motion.div>
       </motion.section>
 
@@ -45,32 +38,55 @@ const Home = () => {
         className="info-grid"
         initial="hidden"
         whileInView="visible"
-        viewport={{ once: true }}
-        transition={{ staggerChildren: 0.15 }}
+        viewport={{ once: true, margin: "-100px" }}
+        variants={gridVariant}
       >
         <motion.div className="info-card" variants={cardVariant}>
-          <h3>Machine Learning</h3>
+          <h3>🤖 AI-Powered Analysis</h3>
           <p>
-            Trained on symptom–disease relationships using Random Forest
-            classification.
-          </p>
-        </motion.div>
-        <motion.div className="info-card" variants={cardVariant}>
-          <h3>Explainable Output</h3>
-          <p>
-            Shows predicted disease along with human-readable descriptions and
-            precautions.
+            Utilizes a Random Forest algorithm trained on heavily validated medical datasets 
+            to identify potential conditions based on your specific symptoms.
           </p>
         </motion.div>
 
+        <motion.div className="info-card" variants={cardVariant}>
+          <h3>⚡ Instant Results</h3>
+          <p>
+            No waiting times. Get immediate predictions along with descriptions to 
+            help you understand potential health issues better.
+          </p>
+        </motion.div>
+
+        <motion.div className="info-card" variants={cardVariant}>
+          <h3>🛡️ Preventive Care</h3>
+          <p>
+            Beyond diagnosis, we provide actionable precautions and lifestyle 
+            recommendations to help you manage your health proactively.
+          </p>
+        </motion.div>
       </motion.section>
     </div>
   );
 };
 
+const gridVariant = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.15,
+      delayChildren: 0.3
+    }
+  }
+};
+
 const cardVariant = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0 }
+  hidden: { opacity: 0, y: 30 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { duration: 0.5, ease: "easeOut" }
+  }
 };
 
 export default Home;
